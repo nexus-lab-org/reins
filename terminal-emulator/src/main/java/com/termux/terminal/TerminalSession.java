@@ -33,6 +33,16 @@ public class TerminalSession extends TerminalOutput {
         void onWrite(byte[] data, int offset, int count);
     }
 
+    /**
+     * Invoked whenever the local emulator's column/row count actually changes, so the remote PTY
+     * (an SSH "window-change" request, or Mosh's equivalent) can be kept in sync with what's really
+     * on screen - a remote TUI (e.g. herdr) that picks its layout off the reported terminal size
+     * otherwise never learns the phone's real, usually much narrower, dimensions.
+     */
+    public interface ResizeCallback {
+        void onResize(int columns, int rows);
+    }
+
     public final String mHandle = UUID.randomUUID().toString();
 
     TerminalEmulator mEmulator;
@@ -43,6 +53,7 @@ public class TerminalSession extends TerminalOutput {
     private final Integer mTranscriptRows;
 
     private volatile RemoteWriteCallback mRemoteWriteCallback;
+    private volatile ResizeCallback mResizeCallback;
     private volatile boolean mFinished = false;
 
     /** Buffer to translate code points into UTF-8 before writing to the remote write callback. */
@@ -63,6 +74,10 @@ public class TerminalSession extends TerminalOutput {
         mRemoteWriteCallback = callback;
     }
 
+    public void setResizeCallback(ResizeCallback callback) {
+        mResizeCallback = callback;
+    }
+
     public void updateTerminalSessionClient(TerminalSessionClient client) {
         mClient = client;
         if (mEmulator != null) mEmulator.updateTerminalSessionClient(client);
@@ -76,6 +91,8 @@ public class TerminalSession extends TerminalOutput {
         } else {
             mEmulator.resize(columns, rows, cellWidthPixels, cellHeightPixels);
         }
+        ResizeCallback callback = mResizeCallback;
+        if (callback != null) callback.onResize(columns, rows);
     }
 
     public String getTitle() {

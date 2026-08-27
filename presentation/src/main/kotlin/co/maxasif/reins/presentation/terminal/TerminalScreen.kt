@@ -18,12 +18,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import co.maxasif.reins.presentation.settings.FontSizeState
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import com.termux.view.TerminalView
+import kotlin.math.roundToInt
 
 /**
  * Hosts the Data Channel PTY: a vendored Termux [TerminalView] wrapped in [AndroidView] (ticket
@@ -67,7 +70,11 @@ fun TerminalScreen(
                     isFocusable = true
                     isFocusableInTouchMode = true
                     setTerminalViewClient(viewClient)
-                    setTextSize(36)
+                    // TerminalView.setTextSize() takes raw Paint px, not sp - it does not scale with
+                    // display density on its own, so the conversion has to happen here (a font size
+                    // that looks right on one device's density would end up wrong-sized, and so
+                    // fitting the wrong column count, on any other).
+                    setTextSize(with(density) { FontSizeState.fontSizeSp.sp.toPx() }.roundToInt())
                     attachSession(session)
                     // TerminalView never repaints on its own - something has to call
                     // onScreenUpdated() whenever new PTY bytes land. Upstream Termux does this by
@@ -89,6 +96,10 @@ fun TerminalScreen(
         if (imeVisible) {
             ExtraKeysRow(session = session, viewClient = viewClient)
         }
+    }
+
+    LaunchedEffect(FontSizeState.fontSizeSp) {
+        terminalView?.setTextSize(with(density) { FontSizeState.fontSizeSp.sp.toPx() }.roundToInt())
     }
 
     LaunchedEffect(Unit) {

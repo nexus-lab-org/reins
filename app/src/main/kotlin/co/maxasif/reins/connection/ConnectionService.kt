@@ -327,6 +327,11 @@ private suspend fun openConnection(
     session.setRemoteWriteCallback { data, offset, count ->
         dataChannel.sendInput(data.copyOfRange(offset, offset + count))
     }
+    // TerminalView.updateSize() reflows the local emulator whenever its real measured size changes
+    // (e.g. the IME showing/hiding, ExtraKeysRow appearing) - without also forwarding that here, the
+    // remote PTY (and anything sizing its own layout off it, like herdr) never learns the phone's
+    // actual, usually much narrower than 80x24, dimensions.
+    session.setResizeCallback { cols, rows -> dataChannel.sendResize(cols, rows) }
     dataChannel.startReading(
         onTerminalBytes = { bytes -> session.feedIncoming(bytes, bytes.size) },
         onShutdown = { session.finishIfRunning() },
