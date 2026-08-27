@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.os.Binder
 import android.os.IBinder
@@ -37,6 +38,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
 /** Fixed geometry for the Data Channel handshake (ticket 017). Live resize-to-remote
  * synchronization as [com.termux.view.TerminalView] measures its own size is follow-up ticket work. */
@@ -47,15 +49,31 @@ private const val NOTIFICATION_CHANNEL_ID = "reins_live_connections"
 private const val NOTIFICATION_ID = 1
 
 /**
- * The foreground `Service` decided in [ticket 013](013-connection-lifecycle-ownership.md) and
- * built out here (ticket 026): a connection manager keyed by [Host.id], owning every live
- * connection's [LiveConnection] - independent native Mosh/SSH handles and JNI threading per Host,
- * none of it tied to any Activity/ViewModel/Composable. Leaving the Terminal screen is a UI-stack
- * pop in `:app`'s nav host and never touches this map; only [disconnect] does.
+ * One connection attempt/session, independent of every other session even for the same [hostId] -
+ * a user can run several concurrent sessions against one Host (e.g. one for editing, one for a
+ * long-running command), each with its own native SSH/Mosh handle. [label] is a per-Host ordinal
+ * ("Session 1", "Session 2", ...) assigned at creation and stable for the process lifetime, even
+ * if earlier sessions for that Host have since closed - it's what the session-picker sheet and the
+ * notification show, not an identifier anything keys off of (that's [sessionId]).
+ */
+data class ConnectionSession(
+    val sessionId: String,
+    val hostId: String,
+    val label: String,
+    val state: ConnectUiState,
+)
+
+/**
+ * The foreground `Service` decided in [ticket 013](013-connection-lifecycle-ownership.md), built
+ * out in ticket 026 keyed by [Host.id], and re-keyed by session id (ticket 030) to allow several
+ * concurrent sessions against the same Host - each [ConnectionSession] owns an independent
+ * [LiveConnection] (native Mosh/SSH handle and JNI threading), none of it tied to any
+ * Activity/ViewModel/Composable. Leaving the Terminal screen is a UI-stack pop in `:app`'s nav host
+ * and never touches this map; only [disconnect] does.
  *
- * Bound by [MainActivity] for the [states] flow and the [connect]/[disconnect] calls, and started
- * (via `startForegroundService`) the first time a connection is requested so it outlives the
- * Activity being destroyed or the app being backgrounded - the whole point of ticket 013's
+ * Bound by [MainActivity] for the [sessions] flow and the [startNewSession]/[disconnect] calls, and
+ * started (via `startForegroundService`) the first time a connection is requested so it outlives
+ * the Activity being destroyed or the app being backgrounded - the whole point of ticket 013's
  * Service-over-ViewModel decision. Stops itself once the last live connection is gone.
  */
 class ConnectionService : Service() {
@@ -63,10 +81,13 @@ class ConnectionService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val liveConnections = mutableMapOf<String, LiveConnection>()
 
-    private val _states = MutableStateFlow<Map<String, ConnectUiState>>(emptyMap())
+    /** Per-Host count of sessions ever created this process lifetime - feeds [ConnectionSession.label]. */
+    private val sessionOrdinals = mutableMapOf<String, Int>()
 
-    /** Per-Host UI state (stepper / connected / failed), keyed by [Host.id] - `:app`'s nav host observes this directly. */
-    val states: StateFlow<Map<String, ConnectUiState>> = _states.asStateFlow()
+    private val _sessions = MutableStateFlow<Map<String, ConnectionSession>>(emptyMap())
+
+    /** Every session (any [ConnectUiState]), keyed by session id - `:app`'s nav host observes this directly. */
+    val sessions: StateFlow<Map<String, ConnectionSession>> = _sessions.asStateFlow()
 
     inner class LocalBinder : Binder() {
         val service: ConnectionService get() = this@ConnectionService
@@ -94,31 +115,33 @@ class ConnectionService : Service() {
         super.onDestroy()
     }
 
-    fun isLive(hostId: String): Boolean = liveConnections.containsKey(hostId)
+    /** Every live-or-connecting session for [hostId], oldest first - what the session-picker sheet lists. */
+    fun sessionsForHost(hostId: String): List<ConnectionSession> =
+        _sessions.value.values.filter { it.hostId == hostId }.sortedBy { it.label }
 
     /**
-     * Starts (or no-ops onto an already-live/connecting) [host]'s connection. Multiple Hosts can
-     * be mid-connect or live at once - each gets its own entry in [states] and, once connected,
-     * its own [LiveConnection] with independent native handles (ticket 026's core requirement).
+     * Always starts a brand-new session against [host], independent of any other session already
+     * live for that same Host (ticket 030 - multiple concurrent sessions per Host). Returns the new
+     * session's id immediately so the caller can navigate to it before the connect finishes; its
+     * progress streams through [sessions].
      *
      * [password] is required (and only used) when [Host.authMethod] is [HostAuthMethod.Password] -
-     * the caller (`MainActivity`'s Connect destination) collects it from the user right before
+     * the caller (`MainActivity`'s connect-request flow) collects it from the user right before
      * calling this, and it's never persisted. A successful password connect upgrades the Host to
      * key-based auth - see [openConnection]'s post-connect step.
      */
-    fun connect(host: Host, password: String? = null) {
-        if (liveConnections.containsKey(host.id)) {
-            updateState(host.id, liveConnections.getValue(host.id).connected)
-            return
-        }
-        if (_states.value[host.id] is ConnectUiState.Stepper) return
+    fun startNewSession(host: Host, password: String? = null): String {
+        val sessionId = UUID.randomUUID().toString()
+        val ordinal = (sessionOrdinals[host.id] ?: 0) + 1
+        sessionOrdinals[host.id] = ordinal
+        val label = "Session $ordinal"
 
         // Marks the Service "started" (independent of any Activity's bind) so it survives
         // navigation, backgrounding, and the Activity being destroyed - ticket 013's whole point.
         startForegroundService(Intent(this, ConnectionService::class.java))
 
         val app = application as ReinsApplication
-        updateState(host.id, ConnectUiState.Stepper.ResolvingHost)
+        updateSession(sessionId, hostId = host.id, label = label, state = ConnectUiState.Stepper.ResolvingHost)
         serviceScope.launch {
             try {
                 val resources = openConnection(
@@ -126,9 +149,10 @@ class ConnectionService : Service() {
                     password = password,
                     hostRepository = app.hostRepository,
                     identityRepository = app.identityRepository,
-                    onStep = { step -> updateState(host.id, step) },
+                    appContext = applicationContext,
+                    onStep = { step -> updateSession(sessionId, host.id, label, step) },
                 )
-                liveConnections[host.id] = LiveConnection(
+                liveConnections[sessionId] = LiveConnection(
                     hostId = host.id,
                     displayName = host.displayName,
                     connected = resources.connected,
@@ -136,18 +160,19 @@ class ConnectionService : Service() {
                     dataChannel = resources.dataChannel,
                     connectionScope = resources.connectionScope,
                 )
-                updateState(host.id, resources.connected)
+                updateSession(sessionId, host.id, label, resources.connected)
                 refreshNotification()
             } catch (t: Throwable) {
-                updateState(host.id, ConnectUiState.Failed(connectFailureMessage(t, host)))
+                updateSession(sessionId, host.id, label, ConnectUiState.Failed(connectFailureMessage(t, host)))
             }
         }
+        return sessionId
     }
 
-    /** Explicit per-Host disconnect (ticket 026) - tears down only [hostId]'s channels, never another live connection's. */
-    fun disconnect(hostId: String) {
-        liveConnections.remove(hostId)?.close()
-        _states.update { it - hostId }
+    /** Explicit per-session disconnect (ticket 026/030) - tears down only [sessionId]'s channels, never another session's. */
+    fun disconnect(sessionId: String) {
+        liveConnections.remove(sessionId)?.close()
+        _sessions.update { it - sessionId }
         if (liveConnections.isEmpty()) {
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -156,8 +181,8 @@ class ConnectionService : Service() {
         }
     }
 
-    private fun updateState(hostId: String, state: ConnectUiState) {
-        _states.update { it + (hostId to state) }
+    private fun updateSession(sessionId: String, hostId: String, label: String, state: ConnectUiState) {
+        _sessions.update { it + (sessionId to ConnectionSession(sessionId, hostId, label, state)) }
     }
 
     private fun createNotificationChannel() {
@@ -173,9 +198,18 @@ class ConnectionService : Service() {
         getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification())
     }
 
-    /** Single expandable/summary notification listing active hosts, per ticket 013's resolution - not one notification per host. */
+    /**
+     * Single expandable/summary notification listing active hosts, per ticket 013's resolution -
+     * not one notification per host, and not one per session either: several sessions against the
+     * same Host collapse into a single "(n)" count rather than repeating the Host's name.
+     */
     private fun buildNotification(): Notification {
-        val liveNames = liveConnections.values.map { it.displayName }
+        val sessionCountsByHost = liveConnections.values.groupingBy { it.hostId }.eachCount()
+        val hostNames = liveConnections.values.associateBy({ it.hostId }, { it.displayName })
+        val liveNames = sessionCountsByHost.map { (hostId, count) ->
+            val name = hostNames[hostId] ?: hostId
+            if (count > 1) "$name ($count)" else name
+        }
         val text = if (liveNames.isEmpty()) "No active connections" else "Connected: ${liveNames.joinToString(", ")}"
         val openAppIntent = PendingIntent.getActivity(
             this,
@@ -238,6 +272,7 @@ private suspend fun openConnection(
     password: String?,
     hostRepository: HostRepository,
     identityRepository: IdentityRepositoryImpl,
+    appContext: Context,
     onStep: (ConnectUiState.Stepper) -> Unit,
 ): ConnectedResources = withContext(Dispatchers.IO) {
     onStep(ConnectUiState.Stepper.ResolvingHost)
@@ -322,7 +357,7 @@ private suspend fun openConnection(
     // TerminalSession's constructor creates an android.os.Handler, which requires a thread with a
     // prepared Looper - only the main thread qualifies here, unlike the rest of this function
     // which deliberately runs on Dispatchers.IO for the blocking SSH/socket calls above.
-    val session = withContext(Dispatchers.Main) { TerminalSession(ReinsTerminalSessionClient(), null) }
+    val session = withContext(Dispatchers.Main) { TerminalSession(ReinsTerminalSessionClient(appContext), null) }
     session.updateSize(INITIAL_COLS, INITIAL_ROWS, 0, 0)
     session.setRemoteWriteCallback { data, offset, count ->
         dataChannel.sendInput(data.copyOfRange(offset, offset + count))

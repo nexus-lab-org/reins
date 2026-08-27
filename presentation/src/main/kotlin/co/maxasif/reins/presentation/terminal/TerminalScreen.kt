@@ -113,7 +113,7 @@ fun TerminalScreen(
                     // exists to reference) is a no-op there, so wire it up here instead, once the
                     // view actually exists. feedIncoming runs off the Data Channel's reader thread,
                     // so hop back to the main thread via View.post before touching the view.
-                    session.updateTerminalSessionClient(object : TerminalSessionClient by ReinsTerminalSessionClient() {
+                    session.updateTerminalSessionClient(object : TerminalSessionClient by ReinsTerminalSessionClient(context) {
                         override fun onTextChanged(changedSession: TerminalSession) {
                             post { onScreenUpdated() }
                         }

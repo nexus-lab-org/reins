@@ -1,5 +1,8 @@
 package co.maxasif.reins.presentation.terminal
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.util.Log
 import android.util.Patterns
 import android.view.KeyEvent
@@ -20,12 +23,25 @@ private const val TAG = "ReinsTerminal"
  * needs the PTY bytes to reach the screen, which flows through [TerminalSession.feedIncoming]
  * directly, not through this interface.
  */
-class ReinsTerminalSessionClient : TerminalSessionClient {
+class ReinsTerminalSessionClient(private val context: Context) : TerminalSessionClient {
     override fun onTextChanged(changedSession: TerminalSession) = Unit
     override fun onTitleChanged(changedSession: TerminalSession) = Unit
     override fun onSessionFinished(finishedSession: TerminalSession) = Unit
-    override fun onCopyTextToClipboard(session: TerminalSession, text: String?) = Unit
-    override fun onPasteTextFromClipboard(session: TerminalSession?) = Unit
+
+    // Reached from TerminalView's own text-selection Copy/Paste action mode - the "phone clipboard"
+    // referred to here is the OS clipboard (ClipboardManager), not anything internal to Reins.
+    override fun onCopyTextToClipboard(session: TerminalSession, text: String?) {
+        if (text.isNullOrEmpty()) return
+        val clipboard = context.getSystemService(ClipboardManager::class.java)
+        clipboard.setPrimaryClip(ClipData.newPlainText("Terminal selection", text))
+    }
+
+    override fun onPasteTextFromClipboard(session: TerminalSession?) {
+        val clipboard = context.getSystemService(ClipboardManager::class.java)
+        val clipItem = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0) ?: return
+        val text = clipItem.coerceToText(context)?.toString()
+        if (!text.isNullOrEmpty()) session?.emulator?.paste(text)
+    }
     override fun onBell(session: TerminalSession) = Unit
     override fun onColorsChanged(session: TerminalSession) = Unit
     override fun onTerminalCursorStateChange(state: Boolean) = Unit

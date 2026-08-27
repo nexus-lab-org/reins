@@ -19,7 +19,14 @@ sealed class ReinsDestination {
 
     object GenerateKeystoreIdentity : ReinsDestination()
 
-    data class Connect(val hostId: String) : ReinsDestination()
+    /**
+     * [sessionId], not a Host id (ticket 030): a Host can have several concurrent sessions, so
+     * which one is already decided - by a direct "Connect" when there's no existing session for
+     * that Host, or by the session-picker sheet otherwise - before this destination is ever
+     * pushed. This screen only observes [co.maxasif.reins.connection.ConnectionService.sessions]
+     * for [sessionId]; it never starts a connection itself.
+     */
+    data class Connect(val sessionId: String) : ReinsDestination()
 
     object Settings : ReinsDestination()
 }
