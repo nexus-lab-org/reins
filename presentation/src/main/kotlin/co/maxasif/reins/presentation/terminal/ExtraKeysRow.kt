@@ -1,11 +1,15 @@
 package co.maxasif.reins.presentation.terminal
 
 import android.view.KeyEvent
-import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
@@ -15,8 +19,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -53,8 +57,9 @@ fun ExtraKeysRow(session: TerminalSession, viewClient: ReinsTerminalViewClient, 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 4.dp, vertical = 2.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             ExtraKeysState.enabledKeysInOrder.forEach { key ->
                 ExtraKeyButton(
@@ -69,16 +74,24 @@ fun ExtraKeysRow(session: TerminalSession, viewClient: ReinsTerminalViewClient, 
 
 @Composable
 private fun ExtraKeyButton(key: ExtraKey, armed: Boolean, onClick: () -> Unit) {
-    TextButton(
+    val backgroundColor = if (armed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+    val contentColor = if (armed) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    Surface(
         onClick = onClick,
-        modifier = if (armed) Modifier.background(MaterialTheme.colorScheme.primary) else Modifier,
+        modifier = Modifier.sizeIn(minWidth = 36.dp, minHeight = 32.dp),
+        shape = RoundedCornerShape(6.dp),
+        color = backgroundColor,
     ) {
-        val contentColor = if (armed) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-        val icon = ARROW_ICONS[key]
-        if (icon != null) {
-            Icon(imageVector = icon, contentDescription = key.label, tint = contentColor)
-        } else {
-            Text(text = key.label, color = contentColor)
+        Box(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            val icon = ARROW_ICONS[key]
+            if (icon != null) {
+                Icon(imageVector = icon, contentDescription = key.label, tint = contentColor, modifier = Modifier.sizeIn(maxWidth = 18.dp, maxHeight = 18.dp))
+            } else {
+                Text(text = key.label, color = contentColor, style = MaterialTheme.typography.labelMedium)
+            }
         }
     }
 }

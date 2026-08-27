@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -40,6 +42,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -94,6 +97,14 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                 text = "Enable swipe/autocorrect (experimental)",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onBackground,
+            )
+
+            Text(
+                text = "Off by default: the terminal isn't a real text box, so letting your " +
+                    "keyboard swipe-type and autocorrect into it can occasionally misplace or " +
+                    "duplicate characters. Turn this on to try it anyway.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Row(verticalAlignment = Alignment.CenterVertically) {
