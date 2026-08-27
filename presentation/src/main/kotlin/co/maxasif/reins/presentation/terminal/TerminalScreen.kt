@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,6 +37,16 @@ import com.termux.view.TerminalView
  * as soon as it appears (ticket 028), the same feel as any other terminal app, and a back
  * press/gesture dismisses the keyboard first rather than leaving the screen while it's showing
  * (CONTEXT.md's "leaving Terminal is a UI-stack pop only" - dismissing the keyboard isn't leaving).
+ *
+ * [Modifier.imePadding] on the root [Column] is load-bearing, not cosmetic: without it the IME
+ * only visually covers the terminal (MainActivity's `enableEdgeToEdge()` lets content draw behind
+ * system bars/IME), so the [TerminalView] never actually shrinks, [TerminalView.onSizeChanged]
+ * never fires with fewer rows, and the PTY is never told its viewport got smaller - the cursor
+ * ends up rendered behind the keyboard, and a remote TUI (e.g. herdr) that sizes its own layout off
+ * the reported terminal dimensions never sees the smaller size either. `imePadding()` makes the
+ * Column's real measured height shrink when the IME shows, so the [AndroidView] below actually
+ * resizes and [TerminalView]'s existing `onSizeChanged -> updateSize()` path (which already calls
+ * through to [TerminalSession.updateSize], reaching the remote PTY resize) does the rest.
  */
 @Composable
 fun TerminalScreen(
@@ -48,7 +59,7 @@ fun TerminalScreen(
     var terminalView by remember { mutableStateOf<TerminalView?>(null) }
     val imeVisible = WindowInsets.ime.getBottom(density) > 0
 
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize().imePadding()) {
         AndroidView(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             factory = { factoryContext ->

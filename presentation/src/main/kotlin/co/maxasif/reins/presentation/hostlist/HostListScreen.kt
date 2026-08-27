@@ -13,7 +13,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -22,6 +24,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +42,7 @@ import co.maxasif.reins.domain.model.Transport
  * that sees `BuildConfig`) so a build installed on a device can be matched to exactly when it was
  * compiled, without needing `adb` or a package-info lookup.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HostListScreen(
     hosts: List<Host>,
@@ -47,6 +51,7 @@ fun HostListScreen(
     onEditHost: (String) -> Unit,
     onDeleteHost: (String) -> Unit,
     onConnect: (String) -> Unit,
+    onSettings: () -> Unit,
     modifier: Modifier = Modifier,
     buildLabel: String? = null,
 ) {
@@ -54,6 +59,16 @@ fun HostListScreen(
 
     Scaffold(
         modifier = modifier,
+        topBar = {
+            TopAppBar(
+                title = { Text("Reins") },
+                actions = {
+                    IconButton(onClick = onSettings) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                    }
+                },
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(onClick = onAddHost) {
                 Icon(Icons.Filled.Add, contentDescription = "Add host")

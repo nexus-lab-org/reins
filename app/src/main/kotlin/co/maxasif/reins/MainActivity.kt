@@ -9,6 +9,7 @@ import android.os.IBinder
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
@@ -32,6 +33,7 @@ import co.maxasif.reins.presentation.hostlist.HostFormScreen
 import co.maxasif.reins.presentation.hostlist.HostListScreen
 import co.maxasif.reins.presentation.hostlist.ImportIdentityScreen
 import co.maxasif.reins.presentation.nav.ReinsDestination
+import co.maxasif.reins.presentation.settings.SettingsScreen
 import co.maxasif.reins.presentation.theme.ReinsTheme
 import co.maxasif.reins.domain.model.Host
 import co.maxasif.reins.domain.model.HostAuthMethod
@@ -62,6 +64,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Required for Compose's WindowInsets.ime to report real IME visibility/height, and for
+        // the terminal to actually shrink (not just get visually covered) when the keyboard shows
+        // - see TerminalScreen's imePadding() usage.
+        enableEdgeToEdge()
         bindService(Intent(this, ConnectionService::class.java), serviceConnection, Context.BIND_AUTO_CREATE)
         val app = application as ReinsApplication
         setContent {
@@ -117,8 +123,11 @@ private fun ReinsNavHost(
             onEditHost = { hostId -> push(ReinsDestination.HostForm(hostId = hostId)) },
             onDeleteHost = { hostId -> scope.launch { hostRepository.deleteHost(hostId) } },
             onConnect = { hostId -> push(ReinsDestination.Connect(hostId = hostId)) },
+            onSettings = { push(ReinsDestination.Settings) },
             buildLabel = "v${BuildConfig.VERSION_NAME} · built ${BuildConfig.BUILD_TIMESTAMP}",
         )
+
+        is ReinsDestination.Settings -> SettingsScreen()
 
         is ReinsDestination.HostForm -> {
             val initialHost = hosts.firstOrNull { it.id == destination.hostId }
