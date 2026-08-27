@@ -6,7 +6,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
-import android.content.res.AssetManager
 import android.os.Binder
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -20,7 +19,6 @@ import co.maxasif.reins.data.ssh.ReinsSshTransport
 import co.maxasif.reins.data.ssh.SshKeyProviders
 import co.maxasif.reins.data.ssh.SshShellDataChannelSession
 import co.maxasif.reins.data.ssh.TofuHostKeyVerifier
-import co.maxasif.reins.data.voice.VoiceRecorder
 import co.maxasif.reins.domain.model.Host
 import co.maxasif.reins.domain.model.HostAuthMethod
 import co.maxasif.reins.domain.model.Identity
@@ -28,7 +26,6 @@ import co.maxasif.reins.domain.model.Transport
 import co.maxasif.reins.domain.repository.HostRepository
 import co.maxasif.reins.presentation.connect.ConnectUiState
 import co.maxasif.reins.presentation.terminal.ReinsTerminalSessionClient
-import co.maxasif.reins.voice.AppVoiceTranscriber
 import com.termux.terminal.TerminalSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -129,7 +126,6 @@ class ConnectionService : Service() {
                     password = password,
                     hostRepository = app.hostRepository,
                     identityRepository = app.identityRepository,
-                    assets = assets,
                     onStep = { step -> updateState(host.id, step) },
                 )
                 liveConnections[host.id] = LiveConnection(
@@ -242,7 +238,6 @@ private suspend fun openConnection(
     password: String?,
     hostRepository: HostRepository,
     identityRepository: IdentityRepositoryImpl,
-    assets: AssetManager,
     onStep: (ConnectUiState.Stepper) -> Unit,
 ): ConnectedResources = withContext(Dispatchers.IO) {
     onStep(ConnectUiState.Stepper.ResolvingHost)
@@ -338,16 +333,14 @@ private suspend fun openConnection(
         onError = { session.finishIfRunning() },
     )
 
-    // This Host's own scope (ticket 013/026: independent JNI threading per connection) - the
-    // Voice controller below dispatches onto it, and it's cancelled by LiveConnection.close() on
-    // disconnect without touching any other Host's scope.
+    // This Host's own scope (ticket 013/026: independent JNI threading per connection),
+    // cancelled by LiveConnection.close() on disconnect without touching any other Host's scope.
     val connectionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    val voiceTranscriber = AppVoiceTranscriber(VoiceRecorder(assets), connectionScope)
 
     ConnectedResources(
         transport = transport,
         dataChannel = dataChannel,
         connectionScope = connectionScope,
-        connected = ConnectUiState.Connected(session, voiceTranscriber, keySetupNote),
+        connected = ConnectUiState.Connected(session, keySetupNote),
     )
 }

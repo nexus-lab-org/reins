@@ -8,9 +8,9 @@ import kotlinx.coroutines.cancel
 
 /**
  * One live Host connection's full resource set (ticket 026): the native SSH/Mosh transport, the
- * Data Channel shell built on top of it, the JNI-backed [com.termux.terminal.TerminalSession], and
- * the Voice controller wired to it - all independent of every other [LiveConnection]
- * [ConnectionService] is holding. Closing one never touches another's resources or
+ * Data Channel shell built on top of it, and the JNI-backed [com.termux.terminal.TerminalSession] -
+ * all independent of every other [LiveConnection] [ConnectionService] is holding. Closing one
+ * never touches another's resources or
  * [connectionScope] (ticket 013's per-Host independence requirement).
  */
 class LiveConnection(

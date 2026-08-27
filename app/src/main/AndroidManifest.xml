@@ -5,10 +5,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Voice mode's on-device Whisper transcription (ticket 024) - dangerous permission,
-         requested at runtime from VoiceCommandInput before the first recording. -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-
     <!-- ConnectionService (ticket 013/026): a foreground Service so live connections survive
          backgrounding, plus its persistent notification. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

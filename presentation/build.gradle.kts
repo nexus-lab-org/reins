@@ -39,7 +39,6 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.core)
-    // Voice mode (ticket 024) needs Mic/Stop, which aren't in icons-core's small default set.
     implementation(libs.compose.material.icons.extended)
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.runtime.ktx)

@@ -15,13 +15,12 @@ terms below.
 :presentation — Compose screens (Host List, Connect, Terminal+Dial, Settings), ViewModels
 :domain       — Host, Identity, UseCases, repository interfaces — pure Kotlin, zero Android/JNI/sshj deps
 :data         — Repository impls: Room, the custom sshj direct-streamlocal channel, Keystore adapter,
-                wraps :mosh and :whisper
+                wraps :mosh
 :mosh         — JNI wrapper on rjyo/mosh-android's prebuilt NDK libs, own CMake/NDK toolchain
-:whisper      — JNI wrapper on whisper.cpp's examples/whisper.android, own CMake/NDK toolchain
 ```
 
-Dependency direction: `app → presentation, data` / `presentation → domain` / `data → domain, mosh,
-whisper` / `domain → nothing`. `domain` never sees Room entities, JNI handles, or sshj types —
+Dependency direction: `app → presentation, data` / `presentation → domain` / `data → domain,
+mosh` / `domain → nothing`. `domain` never sees Room entities, JNI handles, or sshj types —
 only its own repository interfaces, implemented in `data`.
 
 ## Requirements
@@ -39,7 +38,7 @@ sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 echo "sdk.dir=$ANDROID_HOME" > local.properties
 ```
 
-The NDK and CMake are pulled in automatically on first build of `:mosh`/`:whisper` (Gradle
+The NDK and CMake are pulled in automatically on first build of `:mosh` (Gradle
 auto-accepts and installs them via the AGP `externalNativeBuild` config), as long as
 `sdkmanager`'s license for them has been accepted once (`sdkmanager --licenses`).
 
@@ -56,7 +55,7 @@ real connection.
 ## Building
 
 ```sh
-./gradlew assembleDebug        # build the full app, including :mosh and :whisper's native builds
+./gradlew assembleDebug        # build the full app, including :mosh's native build
 ./gradlew installDebug         # build and install on a connected device/emulator
 ```
 
@@ -71,8 +70,8 @@ No CI — this is local-build-only (ticket 014). Run tests per layer directly:
 ./gradlew test                                    # every JVM-level test module at once
 ```
 
-`:mosh` and `:whisper` are thin JNI wrappers — not unit-tested at the native boundary; verify them
-with a manual smoke check on a real device instead (see their tickets for what to check).
+`:mosh` is a thin JNI wrapper — not unit-tested at the native boundary; verify it
+with a manual smoke check on a real device instead (see its ticket for what to check).
 
 To run everything that doesn't need a device:
 

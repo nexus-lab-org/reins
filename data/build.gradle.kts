@@ -27,7 +27,6 @@ android {
 dependencies {
     implementation(project(":domain"))
     implementation(project(":mosh"))
-    implementation(project(":whisper"))
 
     implementation(libs.core.ktx)
     implementation(libs.kotlinx.coroutines.android)

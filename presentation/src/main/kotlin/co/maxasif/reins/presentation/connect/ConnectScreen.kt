@@ -67,7 +67,6 @@ fun ConnectScreen(state: ConnectUiState, onDisconnect: () -> Unit, modifier: Mod
                 }
                 TerminalScreen(
                     session = state.session,
-                    voiceTranscriber = state.voiceTranscriber,
                     modifier = Modifier.weight(1f),
                 )
             }

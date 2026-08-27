@@ -1,6 +1,5 @@
 package co.maxasif.reins.presentation.connect
 
-import co.maxasif.reins.presentation.terminal.VoiceTranscriber
 import com.termux.terminal.TerminalSession
 
 /**
@@ -15,16 +14,11 @@ sealed class ConnectUiState {
     }
 
     /**
-     * [voiceTranscriber] wires Voice mode (ticket 024) to on-device whisper.cpp - built by `:app`,
-     * the only module that sees both this `:presentation` interface and `:data`'s
-     * `WhisperBridge`-backed implementation.
-     *
      * [keySetupNote], when non-null, tells the user a password-authenticated connect just
      * generated and installed a key so future connects won't need the password again.
      */
     data class Connected(
         val session: TerminalSession,
-        val voiceTranscriber: VoiceTranscriber,
         val keySetupNote: String? = null,
     ) : ConnectUiState()
 
