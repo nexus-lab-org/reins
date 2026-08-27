@@ -1,5 +1,7 @@
 package co.maxasif.reins.presentation.terminal
 
+import android.content.Intent
+import android.net.Uri
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
@@ -85,6 +87,19 @@ fun TerminalScreen(
                     isFocusableInTouchMode = true
                     setTerminalViewClient(viewClient)
                     viewClient.onTap = { showKeyboard() }
+                    // Long-press a URL to open it in the default browser app, matching the gesture
+                    // real terminal apps use - a plain tap is already claimed for reshowing the
+                    // keyboard, so opening on tap would fire constantly while typing/scrolling.
+                    viewClient.onLongPressUrl = { event ->
+                        val (column, row) = getColumnAndRow(event, true)
+                        val word = session.emulator?.screen?.getWordAtLocation(column, row)
+                        val url = word?.let { extractUrlFromWord(it) }
+                        // A miss (no URL under the press) falls through to TerminalView's own
+                        // default long-press behavior (text selection), so only act - and only
+                        // consume the press - on a hit.
+                        if (url != null) runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                        url != null
+                    }
                     // TerminalView.setTextSize() takes raw Paint px, not sp - it does not scale with
                     // display density on its own, so the conversion has to happen here (a font size
                     // that looks right on one device's density would end up wrong-sized, and so

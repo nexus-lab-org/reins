@@ -1,6 +1,7 @@
 package co.maxasif.reins.presentation.terminal
 
 import android.util.Log
+import android.util.Patterns
 import android.view.KeyEvent
 import android.view.MotionEvent
 import androidx.compose.runtime.getValue
@@ -63,6 +64,13 @@ class ReinsTerminalViewClient : TerminalViewClient {
      */
     var onTap: (() -> Unit)? = null
 
+    /**
+     * Set by [TerminalScreen] to check a long-pressed word for a URL and open it. Returning `true`
+     * (a URL was found and opened) tells [com.termux.view.TerminalView] to skip its own default
+     * long-press behavior (starting text-selection mode) for this press.
+     */
+    var onLongPressUrl: ((MotionEvent) -> Boolean)? = null
+
     fun armCtrl() { ctrlArmed = true }
 
     override fun onScale(scale: Float): Float = 1f
@@ -75,7 +83,7 @@ class ReinsTerminalViewClient : TerminalViewClient {
     override fun copyModeChanged(copyMode: Boolean) = Unit
     override fun onKeyDown(keyCode: Int, e: KeyEvent?, session: TerminalSession?): Boolean = false
     override fun onKeyUp(keyCode: Int, e: KeyEvent?): Boolean = false
-    override fun onLongPress(event: MotionEvent?): Boolean = false
+    override fun onLongPress(event: MotionEvent?): Boolean = event?.let { onLongPressUrl?.invoke(it) } ?: false
     override fun readControlKey(): Boolean {
         if (!ctrlArmed) return false
         ctrlArmed = false
@@ -94,4 +102,15 @@ class ReinsTerminalViewClient : TerminalViewClient {
     override fun logVerbose(tag: String?, message: String?) { Log.v(TAG, "$tag: $message") }
     override fun logStackTraceWithMessage(tag: String?, message: String?, e: Exception?) { Log.e(TAG, message, e) }
     override fun logStackTrace(tag: String?, e: Exception?) { Log.e(TAG, tag, e) }
+}
+
+/**
+ * Finds a URL within a word grabbed off the terminal screen (whitespace-delimited, so it can carry
+ * leading/trailing punctuation from surrounding prose or shell quoting - e.g. a URL in parens or
+ * followed by a comma). Returns `null` when the word contains no recognizable URL.
+ */
+fun extractUrlFromWord(word: String): String? {
+    val matcher = Patterns.WEB_URL.matcher(word)
+    if (!matcher.find()) return null
+    return matcher.group().trimEnd(')', ']', '}', '"', '\'', ',', '.', ';', ':')
 }
