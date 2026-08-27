@@ -32,6 +32,14 @@ public interface TerminalViewClient {
 
     boolean shouldEnforceCharBasedInput();
 
+    /**
+     * Whether the on-screen keyboard should use a normal, swipe/autocorrect-capable text input
+     * type instead of the suggestion-suppressing one {@link #shouldEnforceCharBasedInput()} picks
+     * by default. Opt-in and off by default: a terminal has no real text buffer for the IME to
+     * query, so swipe/autocorrect risks composing-region bugs against it.
+     */
+    boolean shouldEnableSwipeAutocorrect();
+
     boolean shouldUseCtrlSpaceWorkaround();
 
     boolean isTerminalViewSelected();

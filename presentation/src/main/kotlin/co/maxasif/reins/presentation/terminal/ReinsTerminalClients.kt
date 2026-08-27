@@ -6,6 +6,7 @@ import android.view.MotionEvent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import co.maxasif.reins.presentation.settings.SwipeAutocorrectState
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import com.termux.view.TerminalViewClient
@@ -61,6 +62,7 @@ class ReinsTerminalViewClient : TerminalViewClient {
     override fun onSingleTapUp(e: MotionEvent?) = Unit
     override fun shouldBackButtonBeMappedToEscape(): Boolean = false
     override fun shouldEnforceCharBasedInput(): Boolean = true
+    override fun shouldEnableSwipeAutocorrect(): Boolean = SwipeAutocorrectState.enabled
     override fun shouldUseCtrlSpaceWorkaround(): Boolean = false
     override fun isTerminalViewSelected(): Boolean = true
     override fun copyModeChanged(copyMode: Boolean) = Unit

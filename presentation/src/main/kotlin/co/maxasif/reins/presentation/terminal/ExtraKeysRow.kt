@@ -20,38 +20,25 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import co.maxasif.reins.presentation.settings.ExtraKey
+import co.maxasif.reins.presentation.settings.ExtraKeysState
 import com.termux.terminal.KeyHandler
 import com.termux.terminal.TerminalSession
 
-/**
- * The fixed catalog of extra keys (ticket 029 drives which of these are enabled/ordered; ticket
- * 028 hardcodes all seven, Ctrl/Esc/Tab/arrows on, in this order).
- */
-private enum class ExtraKey(val label: String, val icon: ImageVector? = null) {
-    CTRL(label = "Ctrl"),
-    ESC(label = "Esc"),
-    TAB(label = "Tab"),
-    ARROW_UP(label = "Up", icon = Icons.Filled.KeyboardArrowUp),
-    ARROW_DOWN(label = "Down", icon = Icons.Filled.KeyboardArrowDown),
+private val ARROW_ICONS: Map<ExtraKey, ImageVector> = mapOf(
+    ExtraKey.ARROW_UP to Icons.Filled.KeyboardArrowUp,
+    ExtraKey.ARROW_DOWN to Icons.Filled.KeyboardArrowDown,
     // Not the AutoMirrored variants: these send a literal left/right cursor movement to the
     // remote shell regardless of layout direction, so the icon must not flip under RTL either.
-    ARROW_LEFT(label = "Left", icon = Icons.Filled.KeyboardArrowLeft),
-    ARROW_RIGHT(label = "Right", icon = Icons.Filled.KeyboardArrowRight),
-}
-
-private val EXTRA_KEY_ROW = listOf(
-    ExtraKey.CTRL,
-    ExtraKey.ESC,
-    ExtraKey.TAB,
-    ExtraKey.ARROW_UP,
-    ExtraKey.ARROW_DOWN,
-    ExtraKey.ARROW_LEFT,
-    ExtraKey.ARROW_RIGHT,
+    ExtraKey.ARROW_LEFT to Icons.Filled.KeyboardArrowLeft,
+    ExtraKey.ARROW_RIGHT to Icons.Filled.KeyboardArrowRight,
 )
 
 /**
- * A slim row of keys most mobile OS keyboards don't expose (Ctrl, Esc, Tab, arrows) - docked
- * directly above the OS keyboard by the caller, visible only while it's showing (ticket 028).
+ * A slim row of keys most mobile OS keyboards don't expose (Ctrl, Esc, Tab, arrows, and a few
+ * shell-heavy symbols) - docked directly above the OS keyboard by the caller, visible only while
+ * it's showing (ticket 028). Which keys show and in what order comes from [ExtraKeysState]
+ * (ticket 029's Settings picker).
  *
  * Ctrl is a sticky/armed modifier ([ReinsTerminalViewClient.ctrlArmed]/[ReinsTerminalViewClient.armCtrl]):
  * tapping it arms it, and the next key - whether typed on the OS keyboard (consumed via
@@ -69,7 +56,7 @@ fun ExtraKeysRow(session: TerminalSession, viewClient: ReinsTerminalViewClient, 
                 .padding(horizontal = 4.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            EXTRA_KEY_ROW.forEach { key ->
+            ExtraKeysState.enabledKeysInOrder.forEach { key ->
                 ExtraKeyButton(
                     key = key,
                     armed = key == ExtraKey.CTRL && viewClient.ctrlArmed,
@@ -87,13 +74,30 @@ private fun ExtraKeyButton(key: ExtraKey, armed: Boolean, onClick: () -> Unit) {
         modifier = if (armed) Modifier.background(MaterialTheme.colorScheme.primary) else Modifier,
     ) {
         val contentColor = if (armed) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-        if (key.icon != null) {
-            Icon(imageVector = key.icon, contentDescription = key.label, tint = contentColor)
+        val icon = ARROW_ICONS[key]
+        if (icon != null) {
+            Icon(imageVector = icon, contentDescription = key.label, tint = contentColor)
         } else {
             Text(text = key.label, color = contentColor)
         }
     }
 }
+
+private val KEY_CODES: Map<ExtraKey, Int> = mapOf(
+    ExtraKey.ESC to KeyEvent.KEYCODE_ESCAPE,
+    ExtraKey.TAB to KeyEvent.KEYCODE_TAB,
+    ExtraKey.ARROW_UP to KeyEvent.KEYCODE_DPAD_UP,
+    ExtraKey.ARROW_DOWN to KeyEvent.KEYCODE_DPAD_DOWN,
+    ExtraKey.ARROW_LEFT to KeyEvent.KEYCODE_DPAD_LEFT,
+    ExtraKey.ARROW_RIGHT to KeyEvent.KEYCODE_DPAD_RIGHT,
+)
+
+private val SYMBOL_CODEPOINTS: Map<ExtraKey, Int> = mapOf(
+    ExtraKey.PIPE to '|'.code,
+    ExtraKey.SLASH to '/'.code,
+    ExtraKey.DASH to '-'.code,
+    ExtraKey.UNDERSCORE to '_'.code,
+)
 
 private fun onExtraKeyTapped(key: ExtraKey, session: TerminalSession, viewClient: ReinsTerminalViewClient) {
     if (key == ExtraKey.CTRL) {
@@ -101,26 +105,36 @@ private fun onExtraKeyTapped(key: ExtraKey, session: TerminalSession, viewClient
         return
     }
 
-    val keyCode = when (key) {
-        ExtraKey.ESC -> KeyEvent.KEYCODE_ESCAPE
-        ExtraKey.TAB -> KeyEvent.KEYCODE_TAB
-        ExtraKey.ARROW_UP -> KeyEvent.KEYCODE_DPAD_UP
-        ExtraKey.ARROW_DOWN -> KeyEvent.KEYCODE_DPAD_DOWN
-        ExtraKey.ARROW_LEFT -> KeyEvent.KEYCODE_DPAD_LEFT
-        ExtraKey.ARROW_RIGHT -> KeyEvent.KEYCODE_DPAD_RIGHT
-        ExtraKey.CTRL -> return
-    }
-
     // readControlKey() is the same single-shot arm/consume path TerminalView itself queries for
     // every OS-keyboard code point - reusing it here means an armed Ctrl applies uniformly whether
     // the next key comes from the OS keyboard or from this row.
-    val keyMode = if (viewClient.readControlKey()) KeyHandler.KEYMOD_CTRL else 0
-    val emulator = session.emulator
-    val code = KeyHandler.getCode(
-        keyCode,
-        keyMode,
-        emulator?.isCursorKeysApplicationMode ?: false,
-        emulator?.isKeypadApplicationMode ?: false,
-    )
-    if (code != null) session.write(code)
+    val ctrl = viewClient.readControlKey()
+
+    KEY_CODES[key]?.let { keyCode ->
+        val keyMode = if (ctrl) KeyHandler.KEYMOD_CTRL else 0
+        val emulator = session.emulator
+        val code = KeyHandler.getCode(
+            keyCode,
+            keyMode,
+            emulator?.isCursorKeysApplicationMode ?: false,
+            emulator?.isKeypadApplicationMode ?: false,
+        )
+        if (code != null) session.write(code)
+        return
+    }
+
+    SYMBOL_CODEPOINTS[key]?.let { codePoint ->
+        // Mirrors TerminalView.inputCodePoint's own ctrl-letter table for the handful of symbols
+        // that have a real control-character meaning ('/' and '_' both send 0x1F, matching how a
+        // physical Ctrl+/ is interpreted); the rest have no ctrl mapping so are sent as-is.
+        val ctrlMapped = if (ctrl) {
+            when (codePoint) {
+                '_'.code, '/'.code -> 31
+                else -> codePoint
+            }
+        } else {
+            codePoint
+        }
+        session.writeCodePoint(false, ctrlMapped)
+    }
 }

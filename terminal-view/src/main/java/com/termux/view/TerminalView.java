@@ -310,7 +310,14 @@ public final class TerminalView extends View {
         // initially started with the alternate view or if activity is returned to from another app
         // and the alternate view was the one selected the last time.
         if (mClient.isTerminalViewSelected()) {
-            if (mClient.shouldEnforceCharBasedInput()) {
+            if (mClient.shouldEnableSwipeAutocorrect()) {
+                // Opt-in (ticket 029): a normal text input type, same as the "not selected" branch
+                // below, so the IME offers swipe-typing and autocorrect. Known to risk
+                // composing-region bugs against a terminal (no real text buffer for the IME to
+                // query) - that's exactly why it's gated behind this client hook instead of on by
+                // default.
+                outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL;
+            } else if (mClient.shouldEnforceCharBasedInput()) {
                 // Some keyboards seems do not reset the internal state on TYPE_NULL.
                 // Affects mostly Samsung stock keyboards.
                 // https://github.com/termux/termux-app/issues/686
