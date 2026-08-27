@@ -62,6 +62,20 @@ fun TerminalScreen(
     var terminalView by remember { mutableStateOf<TerminalView?>(null) }
     val imeVisible = WindowInsets.ime.getBottom(density) > 0
 
+    fun showKeyboard() {
+        val view = terminalView ?: return
+        view.requestFocus()
+        val controller = ViewCompat.getWindowInsetsController(view)
+        if (controller != null) {
+            controller.show(WindowInsetsCompat.Type.ime())
+        } else {
+            // No window insets controller yet (view not attached to a window) - fall back to the
+            // classic InputMethodManager path, which works even before that attachment completes.
+            val imm = context.getSystemService(InputMethodManager::class.java)
+            imm?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
     Column(modifier = modifier.fillMaxSize().imePadding()) {
         AndroidView(
             modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -70,6 +84,7 @@ fun TerminalScreen(
                     isFocusable = true
                     isFocusableInTouchMode = true
                     setTerminalViewClient(viewClient)
+                    viewClient.onTap = { showKeyboard() }
                     // TerminalView.setTextSize() takes raw Paint px, not sp - it does not scale with
                     // display density on its own, so the conversion has to happen here (a font size
                     // that looks right on one device's density would end up wrong-sized, and so
@@ -102,19 +117,7 @@ fun TerminalScreen(
         terminalView?.setTextSize(with(density) { FontSizeState.fontSizeSp.sp.toPx() }.roundToInt())
     }
 
-    LaunchedEffect(Unit) {
-        val view = terminalView ?: return@LaunchedEffect
-        view.requestFocus()
-        val controller = ViewCompat.getWindowInsetsController(view)
-        if (controller != null) {
-            controller.show(WindowInsetsCompat.Type.ime())
-        } else {
-            // No window insets controller yet (view not attached to a window) - fall back to the
-            // classic InputMethodManager path, which works even before that attachment completes.
-            val imm = context.getSystemService(InputMethodManager::class.java)
-            imm?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
-        }
-    }
+    LaunchedEffect(Unit) { showKeyboard() }
 
     BackHandler(enabled = imeVisible) {
         terminalView?.let { view ->

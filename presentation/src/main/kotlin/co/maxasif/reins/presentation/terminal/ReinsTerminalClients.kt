@@ -56,10 +56,17 @@ class ReinsTerminalViewClient : TerminalViewClient {
     var ctrlArmed: Boolean by mutableStateOf(false)
         private set
 
+    /**
+     * Set by [TerminalScreen] to re-show the OS keyboard on tap - once dismissed (by back, or the
+     * user tapping the IME's own dismiss affordance) nothing else asks for it again, since
+     * [TerminalView] already has focus and requesting it a second time is a no-op.
+     */
+    var onTap: (() -> Unit)? = null
+
     fun armCtrl() { ctrlArmed = true }
 
     override fun onScale(scale: Float): Float = 1f
-    override fun onSingleTapUp(e: MotionEvent?) = Unit
+    override fun onSingleTapUp(e: MotionEvent?) { onTap?.invoke() }
     override fun shouldBackButtonBeMappedToEscape(): Boolean = false
     override fun shouldEnforceCharBasedInput(): Boolean = true
     override fun shouldEnableSwipeAutocorrect(): Boolean = SwipeAutocorrectState.enabled
