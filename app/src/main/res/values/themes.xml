@@ -1,0 +1,4 @@
+<resources>
+    <!-- Fixed dark (Rosé Pine dark) theme, no light variant or picker — ticket 027 -->
+    <style name="Theme.Reins" parent="android:Theme.Material.NoActionBar" />
+</resources>

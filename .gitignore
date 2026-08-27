@@ -1,0 +1,23 @@
+# Android / Gradle
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build/
+*/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+local.properties
+.kotlin/
+
+# :mosh's build-time fetch of rjyo/mosh-android's prebuilt NDK libs (ticket 025/003) - ~150MB per
+# ABI, too large to vendor into git; see mosh/src/main/cpp/CMakeLists.txt's header comment.
+/.moshlibs-cache/
+
+# Claude Code / wayfinder tooling — planning artifacts, not shipped source
+/.context/
+/.agents/
+/.claude/
+skills-lock.json

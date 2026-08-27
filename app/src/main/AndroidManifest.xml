@@ -1,0 +1,46 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Every SSH/Mosh connection Reins makes (sshj sockets, Mosh's UDP transport) needs this -
+         normal-protection, granted at install time, no runtime prompt. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Voice mode's on-device Whisper transcription (ticket 024) - dangerous permission,
+         requested at runtime from VoiceCommandInput before the first recording. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- ConnectionService (ticket 013/026): a foreground Service so live connections survive
+         backgrounding, plus its persistent notification. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:name=".ReinsApplication"
+        android:allowBackup="false"
+        android:icon="@android:drawable/sym_def_app_icon"
+        android:label="Reins"
+        android:theme="@style/Theme.Reins">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Reins">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Owns all live Host connections (ticket 013/026) - a connection manager keyed by
+             Host, independent of MainActivity's lifecycle. dataSync fits best: it exists to keep
+             SSH/Mosh data-channel sockets and JNI terminal sessions alive, not to play media or
+             track location. -->
+        <service
+            android:name=".connection.ConnectionService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+    </application>
+
+</manifest>
