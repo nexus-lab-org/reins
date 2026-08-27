@@ -3,6 +3,9 @@ package co.maxasif.reins.presentation.terminal
 import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import com.termux.view.TerminalViewClient
@@ -41,8 +44,19 @@ class ReinsTerminalSessionClient : TerminalSessionClient {
  * char-based IME input so on-screen-keyboard composing text arrives as plain code points rather
  * than accumulating in the IME's own composing region - the default Termux recommends for exactly
  * this "not a real EditText" scenario.
+ *
+ * [ctrlArmed] backs the extra-keys row's sticky Ctrl modifier (ticket 028): tapping Ctrl calls
+ * [armCtrl], and [readControlKey] - which [com.termux.view.TerminalView] already consults for
+ * every code point it writes, whether typed on the OS keyboard or committed by the IME - reports
+ * it once and disarms, giving single-shot Ctrl+<next key> behavior for free from the vendored
+ * key-handling path, with no changes to TerminalView.java needed.
  */
 class ReinsTerminalViewClient : TerminalViewClient {
+    var ctrlArmed: Boolean by mutableStateOf(false)
+        private set
+
+    fun armCtrl() { ctrlArmed = true }
+
     override fun onScale(scale: Float): Float = 1f
     override fun onSingleTapUp(e: MotionEvent?) = Unit
     override fun shouldBackButtonBeMappedToEscape(): Boolean = false
@@ -53,7 +67,11 @@ class ReinsTerminalViewClient : TerminalViewClient {
     override fun onKeyDown(keyCode: Int, e: KeyEvent?, session: TerminalSession?): Boolean = false
     override fun onKeyUp(keyCode: Int, e: KeyEvent?): Boolean = false
     override fun onLongPress(event: MotionEvent?): Boolean = false
-    override fun readControlKey(): Boolean = false
+    override fun readControlKey(): Boolean {
+        if (!ctrlArmed) return false
+        ctrlArmed = false
+        return true
+    }
     override fun readAltKey(): Boolean = false
     override fun readShiftKey(): Boolean = false
     override fun readFnKey(): Boolean = false

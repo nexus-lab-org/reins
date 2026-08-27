@@ -2,8 +2,11 @@ package co.maxasif.reins.presentation.terminal
 
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,31 +48,37 @@ fun TerminalScreen(
     var terminalView by remember { mutableStateOf<TerminalView?>(null) }
     val imeVisible = WindowInsets.ime.getBottom(density) > 0
 
-    AndroidView(
-        modifier = modifier.fillMaxSize(),
-        factory = { factoryContext ->
-            TerminalView(factoryContext, null).apply {
-                isFocusable = true
-                isFocusableInTouchMode = true
-                setTerminalViewClient(viewClient)
-                setTextSize(36)
-                attachSession(session)
-                // TerminalView never repaints on its own - something has to call
-                // onScreenUpdated() whenever new PTY bytes land. Upstream Termux does this by
-                // having its TerminalSessionClient.onTextChanged reach back into the attached
-                // view; ReinsTerminalSessionClient (built in :app, before any TerminalView
-                // exists to reference) is a no-op there, so wire it up here instead, once the
-                // view actually exists. feedIncoming runs off the Data Channel's reader thread,
-                // so hop back to the main thread via View.post before touching the view.
-                session.updateTerminalSessionClient(object : TerminalSessionClient by ReinsTerminalSessionClient() {
-                    override fun onTextChanged(changedSession: TerminalSession) {
-                        post { onScreenUpdated() }
-                    }
-                })
-                terminalView = this
-            }
-        },
-    )
+    Column(modifier = modifier.fillMaxSize()) {
+        AndroidView(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            factory = { factoryContext ->
+                TerminalView(factoryContext, null).apply {
+                    isFocusable = true
+                    isFocusableInTouchMode = true
+                    setTerminalViewClient(viewClient)
+                    setTextSize(36)
+                    attachSession(session)
+                    // TerminalView never repaints on its own - something has to call
+                    // onScreenUpdated() whenever new PTY bytes land. Upstream Termux does this by
+                    // having its TerminalSessionClient.onTextChanged reach back into the attached
+                    // view; ReinsTerminalSessionClient (built in :app, before any TerminalView
+                    // exists to reference) is a no-op there, so wire it up here instead, once the
+                    // view actually exists. feedIncoming runs off the Data Channel's reader thread,
+                    // so hop back to the main thread via View.post before touching the view.
+                    session.updateTerminalSessionClient(object : TerminalSessionClient by ReinsTerminalSessionClient() {
+                        override fun onTextChanged(changedSession: TerminalSession) {
+                            post { onScreenUpdated() }
+                        }
+                    })
+                    terminalView = this
+                }
+            },
+        )
+
+        if (imeVisible) {
+            ExtraKeysRow(session = session, viewClient = viewClient)
+        }
+    }
 
     LaunchedEffect(Unit) {
         val view = terminalView ?: return@LaunchedEffect
