@@ -1,12 +1,12 @@
 package co.maxasif.reins.presentation.hostlist
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -17,11 +17,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import co.maxasif.reins.presentation.theme.IBMPlexMono
+import co.maxasif.reins.presentation.theme.ReinsSpacing
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Plus
 
 /** A live session's picker-sheet row shape - deliberately not [co.maxasif.reins.connection.ConnectionSession]
- * itself, since `:presentation` cannot depend on `:app`; `MainActivity` maps to this. */
+ * itself, since `:presentation` cannot depend on `:app`; `MainActivity` maps to this.
+ * [hostDisplayName] disambiguates sessions across different hosts in the terminal's global
+ * session switcher (ticket 030) - the [SessionPickerSheet] itself doesn't need it since it's
+ * already scoped to one host, but carries it anyway for a single shared shape. */
 data class SessionSummary(
     val sessionId: String,
+    val hostDisplayName: String,
     val label: String,
     val statusLabel: String,
 )
@@ -41,56 +49,62 @@ fun SessionPickerSheet(
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Column(modifier = Modifier.padding(horizontal = ReinsSpacing.space4, vertical = ReinsSpacing.space2)) {
             Text(
                 text = hostDisplayName,
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 8.dp),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = ReinsSpacing.space3),
             )
             sessions.forEach { session ->
                 SessionRow(session = session, onClick = { onSelectSession(session.sessionId) })
             }
-            SessionRow(
-                label = "New session",
-                statusLabel = null,
-                icon = Icons.Filled.Add,
-                onClick = onNewSession,
-            )
+            Surface(onClick = onNewSession, modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = ReinsSpacing.space4),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(ReinsSpacing.space3),
+                ) {
+                    Icon(imageVector = Lucide.Plus, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Text(
+                        text = "New session",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
 private fun SessionRow(session: SessionSummary, onClick: () -> Unit) {
-    SessionRow(label = session.label, statusLabel = session.statusLabel, icon = null, onClick = onClick)
-}
-
-@Composable
-private fun SessionRow(label: String, statusLabel: String?, icon: androidx.compose.ui.graphics.vector.ImageVector?, onClick: () -> Unit) {
-    Surface(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (icon != null) {
-                Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            }
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (icon != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
-            if (statusLabel != null) {
+    Column {
+        Surface(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(ReinsSpacing.space3),
+            ) {
                 Text(
-                    text = statusLabel,
-                    style = MaterialTheme.typography.bodySmall,
+                    text = session.label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = session.statusLabel,
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(100.dp))
+                        .padding(horizontal = ReinsSpacing.space2, vertical = 4.dp),
                 )
             }
         }
+        androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
     }
 }

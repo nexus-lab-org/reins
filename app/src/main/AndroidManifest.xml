@@ -11,10 +11,17 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- A correctly-implemented foreground Service (see ConnectionService) is still killed in the
+         background on several OEM skins (OnePlus/Oppo/Realme's OxygenOS/ColorOS chief among them)
+         unless the app is explicitly exempted from their battery-optimization/Doze standby bucket -
+         SettingsScreen's "Keep connections alive" row requests this exemption. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <application
         android:name=".ReinsApplication"
         android:allowBackup="false"
-        android:icon="@android:drawable/sym_def_app_icon"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="Reins"
         android:theme="@style/Theme.Reins">
 

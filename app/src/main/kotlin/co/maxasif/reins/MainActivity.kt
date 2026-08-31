@@ -34,6 +34,7 @@ import co.maxasif.reins.presentation.hostlist.ImportIdentityScreen
 import co.maxasif.reins.presentation.hostlist.SessionPickerSheet
 import co.maxasif.reins.presentation.hostlist.SessionSummary
 import co.maxasif.reins.presentation.nav.ReinsDestination
+import co.maxasif.reins.presentation.settings.ExtraKeysSettingsScreen
 import co.maxasif.reins.presentation.settings.SettingsScreen
 import co.maxasif.reins.presentation.theme.ReinsTheme
 import co.maxasif.reins.domain.model.Host
@@ -110,6 +111,12 @@ private fun ReinsNavHost(
     fun push(destination: ReinsDestination) {
         backStack = backStack + destination
     }
+    /** Ticket 030's session switcher (pill/strip/swipe): replaces the current Connect entry in
+     * place rather than pushing, so back still pops out of the terminal in one step regardless of
+     * how many sibling sessions were visited via the switcher. */
+    fun switchSession(sessionId: String) {
+        backStack = backStack.dropLast(1) + ReinsDestination.Connect(sessionId)
+    }
     fun pop() {
         if (backStack.size > 1) {
             // A session that failed to ever connect has nothing to preserve by staying in
@@ -162,7 +169,12 @@ private fun ReinsNavHost(
             sessionCounts = sessions.values.groupingBy { it.hostId }.eachCount(),
         )
 
-        is ReinsDestination.Settings -> SettingsScreen()
+        is ReinsDestination.Settings -> SettingsScreen(
+            onOpenExtraKeys = { push(ReinsDestination.ExtraKeysSettings) },
+            onBack = { pop() },
+        )
+
+        is ReinsDestination.ExtraKeysSettings -> ExtraKeysSettingsScreen(onBack = { pop() })
 
         is ReinsDestination.HostForm -> {
             val initialHost = hosts.firstOrNull { it.id == destination.hostId }
@@ -246,13 +258,28 @@ private fun ReinsNavHost(
             // registers it synchronously before returning the id `beginNewSession` pushes with -
             // this screen only observes, it never starts a connection itself (ticket 030).
             val state = sessions[sessionId]?.state ?: ConnectUiState.Stepper.ResolvingHost
+            // Global, not per-host (ticket 030 follow-up): every live session across every host is
+            // switchable from any terminal, sorted by host name then session label so the strip
+            // reads in a stable order regardless of connection sequence.
+            val hostNameById = hosts.associate { it.id to it.displayName }
+            val allSessions = sessions.values.sortedWith(compareBy({ hostNameById[it.hostId] ?: "" }, { it.label }))
 
             ConnectScreen(
                 state = state,
+                sessions = allSessions.map {
+                    SessionSummary(it.sessionId, hostNameById[it.hostId] ?: "Unknown host", it.label, it.state.statusLabel())
+                },
+                currentSessionId = sessionId,
+                onSwitchSession = ::switchSession,
+                onNewSession = {
+                    val hostId = sessions[sessionId]?.hostId
+                    hosts.find { it.id == hostId }?.let(::beginNewSession)
+                },
                 onDisconnect = {
                     connectionService.disconnect(sessionId)
                     pop()
                 },
+                onBack = { pop() },
             )
         }
     }
@@ -261,7 +288,7 @@ private fun ReinsNavHost(
         val hostSessions = sessions.values.filter { it.hostId == host.id }.sortedBy { it.label }
         SessionPickerSheet(
             hostDisplayName = host.displayName,
-            sessions = hostSessions.map { SessionSummary(it.sessionId, it.label, it.state.statusLabel()) },
+            sessions = hostSessions.map { SessionSummary(it.sessionId, host.displayName, it.label, it.state.statusLabel()) },
             onSelectSession = { sessionId ->
                 sessionPickerHost = null
                 push(ReinsDestination.Connect(sessionId))

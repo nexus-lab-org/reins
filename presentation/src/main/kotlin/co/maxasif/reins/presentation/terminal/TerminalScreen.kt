@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
@@ -11,20 +12,28 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import co.maxasif.reins.presentation.settings.FontSizeState
+import co.maxasif.reins.presentation.theme.ReinsElevation
+import co.maxasif.reins.presentation.theme.ReinsSpacing
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import com.termux.view.TerminalView
@@ -62,6 +71,7 @@ fun TerminalScreen(
     val context = LocalContext.current
     val density = LocalDensity.current
     var terminalView by remember { mutableStateOf<TerminalView?>(null) }
+    var terminalFocused by remember { mutableStateOf(false) }
     val imeVisible = WindowInsets.ime.getBottom(density) > 0
 
     fun showKeyboard() {
@@ -78,14 +88,45 @@ fun TerminalScreen(
         }
     }
 
+    // Focus without popping the IME: entering a terminal (or switching to one) should still route
+    // key input to the right view once the user does bring the keyboard up (a tap, or typing on a
+    // hardware keyboard), but shouldn't cover the screen with the IME unasked - see showKeyboard's
+    // call site below vs. viewClient.onTap's.
+    fun requestFocusOnly() {
+        terminalView?.requestFocus()
+    }
+
     Column(modifier = modifier.fillMaxSize().imePadding()) {
+        // AndroidView's `factory` only runs once per node - switching to a different [session]
+        // (ticket 030's session switcher) would otherwise leave the old TerminalView attached to
+        // the old session forever, since there's no `update` lambda re-running attachSession().
+        // Keying on `session` forces Compose to dispose the old node and run `factory` fresh
+        // against the new one instead of trying to patch an `update` block that would have to
+        // duplicate all of this one-time callback wiring anyway.
+        key(session) {
+        // The vendored TerminalView is both scrollback and cursor-input surface at once (no
+        // separate compose/draft-line widget exists in com.termux.view) - a literal second input
+        // widget would mean forking that rendering/PTY-input pipeline, so "distinct draft bar" is
+        // approximated instead with a border that glows in the theme's primary color exactly while
+        // this view holds focus, via the plain View focus-change listener below.
+        Surface(
+            modifier = Modifier.weight(1f).fillMaxWidth().padding(ReinsSpacing.space1),
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(
+                width = if (terminalFocused) 2.dp else 1.dp,
+                color = if (terminalFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+            ),
+            shadowElevation = if (terminalFocused) ReinsElevation.level2 else ReinsElevation.level0,
+            color = MaterialTheme.colorScheme.background,
+        ) {
         AndroidView(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
+            modifier = Modifier.fillMaxSize(),
             factory = { factoryContext ->
                 TerminalView(factoryContext, null).apply {
                     isFocusable = true
                     isFocusableInTouchMode = true
                     setTerminalViewClient(viewClient)
+                    setOnFocusChangeListener { _, hasFocus -> terminalFocused = hasFocus }
                     viewClient.onTap = { showKeyboard() }
                     // Long-press a URL to open it in the default browser app, matching the gesture
                     // real terminal apps use - a plain tap is already claimed for reshowing the
@@ -122,6 +163,8 @@ fun TerminalScreen(
                 }
             },
         )
+        }
+        }
 
         if (imeVisible) {
             ExtraKeysRow(session = session, viewClient = viewClient)
@@ -132,7 +175,11 @@ fun TerminalScreen(
         terminalView?.setTextSize(with(density) { FontSizeState.fontSizeSp.sp.toPx() }.roundToInt())
     }
 
-    LaunchedEffect(Unit) { showKeyboard() }
+    // Keyed on session (not Unit): a session switch attaches a fresh TerminalView that starts
+    // unfocused, so without this, typing would keep going to whichever view last had focus rather
+    // than the one now on screen. Focus only, not showKeyboard() - the IME should start hidden
+    // (tap the terminal to bring it up), not pop open every time a terminal is opened or switched to.
+    LaunchedEffect(session) { requestFocusOnly() }
 
     BackHandler(enabled = imeVisible) {
         terminalView?.let { view ->

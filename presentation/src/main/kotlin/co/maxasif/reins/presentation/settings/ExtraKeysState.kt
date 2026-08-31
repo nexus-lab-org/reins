@@ -7,13 +7,22 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
 
 /**
- * The fixed catalog the extra-keys row (ticket 028) can show above the OS keyboard: Ctrl, Esc,
- * Tab, the 4 arrows, and 4 symbols mobile keyboards make awkward to type.
+ * The fixed catalog the extra-keys row (ticket 028) can show above the OS keyboard: Ctrl, Shift,
+ * Esc, Tab, the 4 arrows, and 4 symbols mobile keyboards make awkward to type. Shift exists
+ * specifically so Shift+Tab - the "back-tab" combo terminal UIs like Claude Code's plan-mode
+ * toggle listen for - is reachable at all from a soft keyboard, which has no Tab key of its own to
+ * hold Shift down for.
  */
 enum class ExtraKey(val label: String) {
     CTRL("Ctrl"),
+    SHIFT("Shift"),
+    ALT("Alt"),
     ESC("Esc"),
     TAB("Tab"),
+    HOME("Home"),
+    END("End"),
+    PAGE_UP("PgUp"),
+    PAGE_DOWN("PgDn"),
     ARROW_UP("Up"),
     ARROW_DOWN("Down"),
     ARROW_LEFT("Left"),
@@ -33,8 +42,14 @@ enum class ExtraKey(val label: String) {
 object ExtraKeysState {
     private val DEFAULT_ORDER = listOf(
         ExtraKey.CTRL,
+        ExtraKey.SHIFT,
+        ExtraKey.ALT,
         ExtraKey.ESC,
         ExtraKey.TAB,
+        ExtraKey.HOME,
+        ExtraKey.END,
+        ExtraKey.PAGE_UP,
+        ExtraKey.PAGE_DOWN,
         ExtraKey.ARROW_UP,
         ExtraKey.ARROW_DOWN,
         ExtraKey.ARROW_LEFT,
@@ -46,8 +61,14 @@ object ExtraKeysState {
     )
     private val DEFAULT_ENABLED = setOf(
         ExtraKey.CTRL,
+        ExtraKey.SHIFT,
+        ExtraKey.ALT,
         ExtraKey.ESC,
         ExtraKey.TAB,
+        ExtraKey.HOME,
+        ExtraKey.END,
+        ExtraKey.PAGE_UP,
+        ExtraKey.PAGE_DOWN,
         ExtraKey.ARROW_UP,
         ExtraKey.ARROW_DOWN,
         ExtraKey.ARROW_LEFT,
@@ -78,15 +99,34 @@ object ExtraKeysState {
         val index = orderedKeys.indexOf(key)
         if (index in 0 until orderedKeys.lastIndex) orderedKeys.apply { add(index + 1, removeAt(index)) }
     }
+
+    /** Drives the Settings screen's drag-to-reorder list - moves [key] directly to [targetIndex]
+     * rather than one step at a time, since a drag can cross several rows in one gesture update. */
+    fun moveTo(key: ExtraKey, targetIndex: Int) {
+        val fromIndex = orderedKeys.indexOf(key)
+        val clampedTarget = targetIndex.coerceIn(0, orderedKeys.lastIndex)
+        if (fromIndex == -1 || fromIndex == clampedTarget) return
+        orderedKeys.add(clampedTarget, orderedKeys.removeAt(fromIndex))
+    }
 }
 
 /**
- * The experimental "swipe/autocorrect" toggle (ticket 029), off by default. Turning it on tells
- * [com.termux.view.TerminalView] to use a normal text input type (swipe-typing/autocorrect
- * capable) instead of the suggestion-suppressing one it uses by default - which risks
- * composing-region bugs against a terminal (no real text buffer for the IME to query), hence
- * opt-in. Same in-memory/process-lifetime pattern as [FontSizeState] and [ExtraKeysState].
+ * The experimental "swipe/autocorrect" toggle (ticket 029), on by default. Turning it off tells
+ * [com.termux.view.TerminalView] to use the suggestion-suppressing input type instead of a normal
+ * text input type (swipe-typing/autocorrect capable) - the normal one risks composing-region bugs
+ * against a terminal (no real text buffer for the IME to query), so it stays a toggle rather than
+ * a fixed choice. Same in-memory/process-lifetime pattern as [FontSizeState] and [ExtraKeysState].
  */
 object SwipeAutocorrectState {
-    var enabled: Boolean by mutableStateOf(false)
+    var enabled: Boolean by mutableStateOf(true)
+}
+
+/**
+ * Toggle for ticket 030's swipe-left/right-to-switch-sessions gesture over the terminal body, on
+ * by default. Off leaves the session-count pill/strip as the only way to switch - useful for
+ * anyone whose remote shell work involves its own horizontal swipes/gestures that this would
+ * otherwise compete with. Same in-memory/process-lifetime pattern as [SwipeAutocorrectState].
+ */
+object SwipeSessionSwitchState {
+    var enabled: Boolean by mutableStateOf(true)
 }

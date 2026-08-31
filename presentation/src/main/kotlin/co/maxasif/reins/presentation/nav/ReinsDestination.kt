@@ -29,4 +29,7 @@ sealed class ReinsDestination {
     data class Connect(val sessionId: String) : ReinsDestination()
 
     object Settings : ReinsDestination()
+
+    /** The extra-keys picker, split out of [Settings] into its own page. */
+    object ExtraKeysSettings : ReinsDestination()
 }

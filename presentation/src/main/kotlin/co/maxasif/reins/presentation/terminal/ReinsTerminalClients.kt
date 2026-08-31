@@ -67,10 +67,20 @@ class ReinsTerminalSessionClient(private val context: Context) : TerminalSession
  * [armCtrl], and [readControlKey] - which [com.termux.view.TerminalView] already consults for
  * every code point it writes, whether typed on the OS keyboard or committed by the IME - reports
  * it once and disarms, giving single-shot Ctrl+<next key> behavior for free from the vendored
- * key-handling path, with no changes to TerminalView.java needed.
+ * key-handling path, with no changes to TerminalView.java needed. [shiftArmed]/[armShift]/
+ * [readShiftKey] mirror this exactly for Shift, needed so Shift+Tab (Claude Code's plan-mode
+ * toggle listens for the resulting "\033[Z" back-tab sequence) is reachable from a soft keyboard.
+ * [altArmed]/[armAlt]/[readAltKey] mirror the same pattern again for Alt (e.g. Alt+Left/Right word
+ * navigation in shells/editors that bind it).
  */
 class ReinsTerminalViewClient : TerminalViewClient {
     var ctrlArmed: Boolean by mutableStateOf(false)
+        private set
+
+    var shiftArmed: Boolean by mutableStateOf(false)
+        private set
+
+    var altArmed: Boolean by mutableStateOf(false)
         private set
 
     /**
@@ -88,6 +98,8 @@ class ReinsTerminalViewClient : TerminalViewClient {
     var onLongPressUrl: ((MotionEvent) -> Boolean)? = null
 
     fun armCtrl() { ctrlArmed = true }
+    fun armShift() { shiftArmed = true }
+    fun armAlt() { altArmed = true }
 
     override fun onScale(scale: Float): Float = 1f
     override fun onSingleTapUp(e: MotionEvent?) { onTap?.invoke() }
@@ -105,8 +117,16 @@ class ReinsTerminalViewClient : TerminalViewClient {
         ctrlArmed = false
         return true
     }
-    override fun readAltKey(): Boolean = false
-    override fun readShiftKey(): Boolean = false
+    override fun readAltKey(): Boolean {
+        if (!altArmed) return false
+        altArmed = false
+        return true
+    }
+    override fun readShiftKey(): Boolean {
+        if (!shiftArmed) return false
+        shiftArmed = false
+        return true
+    }
     override fun readFnKey(): Boolean = false
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession?): Boolean = false
     override fun onEmulatorSet() = Unit

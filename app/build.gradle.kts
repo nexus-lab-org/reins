@@ -31,6 +31,10 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            // No production keystore exists yet for this personal-use, sideloaded-only app - debug
+            // signing keeps `assembleRelease` producing something `adb install` can actually put on
+            // a device. Swap in a real release keystore before this is ever distributed to anyone else.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
