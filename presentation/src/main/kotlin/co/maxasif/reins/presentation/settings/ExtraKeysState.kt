@@ -1,5 +1,6 @@
 package co.maxasif.reins.presentation.settings
 
+import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -34,12 +35,15 @@ enum class ExtraKey(val label: String) {
 }
 
 /**
- * Which [ExtraKey]s the extra-keys row shows and in what order (ticket 029), following
- * [FontSizeState]'s pattern: in-memory/process-lifetime only, no settings-persistence layer
- * exists yet. Default: Ctrl/Esc/Tab/arrows on, the four symbols off, in that logical order -
- * matching ticket 028's original hardcoded row exactly, with the symbols appended off by default.
+ * Which [ExtraKey]s the extra-keys row shows and in what order (ticket 029), persisted via
+ * [SettingsPreferences]. Default: Ctrl/Esc/Tab/arrows on, the four symbols off, in that logical
+ * order - matching ticket 028's original hardcoded row exactly, with the symbols appended off by
+ * default.
  */
 object ExtraKeysState {
+    private const val ORDER_KEY = "extra_keys_order"
+    private const val ENABLED_KEY = "extra_keys_enabled"
+
     private val DEFAULT_ORDER = listOf(
         ExtraKey.CTRL,
         ExtraKey.SHIFT,
@@ -84,6 +88,7 @@ object ExtraKeysState {
 
     fun setEnabled(key: ExtraKey, enabled: Boolean) {
         enabledState.value = if (enabled) enabledState.value + key else enabledState.value - key
+        persist()
     }
 
     /** The keys the extra-keys row should actually show, in the user's chosen order. */
@@ -92,12 +97,18 @@ object ExtraKeysState {
 
     fun moveUp(key: ExtraKey) {
         val index = orderedKeys.indexOf(key)
-        if (index > 0) orderedKeys.apply { add(index - 1, removeAt(index)) }
+        if (index > 0) {
+            orderedKeys.apply { add(index - 1, removeAt(index)) }
+            persist()
+        }
     }
 
     fun moveDown(key: ExtraKey) {
         val index = orderedKeys.indexOf(key)
-        if (index in 0 until orderedKeys.lastIndex) orderedKeys.apply { add(index + 1, removeAt(index)) }
+        if (index in 0 until orderedKeys.lastIndex) {
+            orderedKeys.apply { add(index + 1, removeAt(index)) }
+            persist()
+        }
     }
 
     /** Drives the Settings screen's drag-to-reorder list - moves [key] directly to [targetIndex]
@@ -107,6 +118,27 @@ object ExtraKeysState {
         val clampedTarget = targetIndex.coerceIn(0, orderedKeys.lastIndex)
         if (fromIndex == -1 || fromIndex == clampedTarget) return
         orderedKeys.add(clampedTarget, orderedKeys.removeAt(fromIndex))
+        persist()
+    }
+
+    private fun persist() {
+        SettingsPreferences.edit {
+            putString(ORDER_KEY, orderedKeys.joinToString(",") { it.name })
+            putStringSet(ENABLED_KEY, enabledState.value.mapTo(mutableSetOf()) { it.name })
+        }
+    }
+
+    internal fun restore(prefs: SharedPreferences) {
+        val restoredOrder = prefs.getString(ORDER_KEY, null)
+            ?.split(",")
+            ?.mapNotNull { name -> runCatching { ExtraKey.valueOf(name) }.getOrNull() }
+        if (restoredOrder != null && restoredOrder.size == ExtraKey.entries.size) {
+            orderedKeys.clear()
+            orderedKeys.addAll(restoredOrder)
+        }
+        prefs.getStringSet(ENABLED_KEY, null)?.let { names ->
+            enabledState.value = names.mapNotNull { name -> runCatching { ExtraKey.valueOf(name) }.getOrNull() }.toSet()
+        }
     }
 }
 
@@ -115,18 +147,42 @@ object ExtraKeysState {
  * [com.termux.view.TerminalView] to use the suggestion-suppressing input type instead of a normal
  * text input type (swipe-typing/autocorrect capable) - the normal one risks composing-region bugs
  * against a terminal (no real text buffer for the IME to query), so it stays a toggle rather than
- * a fixed choice. Same in-memory/process-lifetime pattern as [FontSizeState] and [ExtraKeysState].
+ * a fixed choice. Persisted via [SettingsPreferences].
  */
 object SwipeAutocorrectState {
-    var enabled: Boolean by mutableStateOf(true)
+    private const val KEY = "swipe_autocorrect_enabled"
+    private val state = mutableStateOf(true)
+
+    var enabled: Boolean
+        get() = state.value
+        set(value) {
+            state.value = value
+            SettingsPreferences.edit { putBoolean(KEY, value) }
+        }
+
+    internal fun restore(prefs: SharedPreferences) {
+        state.value = prefs.getBoolean(KEY, true)
+    }
 }
 
 /**
  * Toggle for ticket 030's swipe-left/right-to-switch-sessions gesture over the terminal body, on
  * by default. Off leaves the session-count pill/strip as the only way to switch - useful for
  * anyone whose remote shell work involves its own horizontal swipes/gestures that this would
- * otherwise compete with. Same in-memory/process-lifetime pattern as [SwipeAutocorrectState].
+ * otherwise compete with. Persisted via [SettingsPreferences].
  */
 object SwipeSessionSwitchState {
-    var enabled: Boolean by mutableStateOf(true)
+    private const val KEY = "swipe_session_switch_enabled"
+    private val state = mutableStateOf(true)
+
+    var enabled: Boolean
+        get() = state.value
+        set(value) {
+            state.value = value
+            SettingsPreferences.edit { putBoolean(KEY, value) }
+        }
+
+    internal fun restore(prefs: SharedPreferences) {
+        state.value = prefs.getBoolean(KEY, true)
+    }
 }
