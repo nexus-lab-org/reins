@@ -2568,7 +2568,11 @@ public final class TerminalEmulator {
     }
 
     public String getSelectedText(int x1, int y1, int x2, int y2) {
-        return mScreen.getSelectedText(x1, y1, x2, y2);
+        return getSelectedText(x1, y1, x2, y2, false);
+    }
+
+    public String getSelectedText(int x1, int y1, int x2, int y2, boolean joinFullLines) {
+        return mScreen.getSelectedText(x1, y1, x2, y2, true, joinFullLines);
     }
 
     /** Get the terminal session's title (null if not set). */
