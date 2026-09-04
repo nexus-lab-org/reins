@@ -7,6 +7,7 @@ import co.maxasif.reins.data.identity.IdentityKeyCipher
 import co.maxasif.reins.data.repository.HostRepositoryImpl
 import co.maxasif.reins.data.repository.IdentityRepositoryImpl
 import co.maxasif.reins.data.ssh.BouncyCastleSetup
+import co.maxasif.reins.presentation.settings.SettingsPreferences
 
 /**
  * Manual DI wiring - no DI framework in this project, so the Room database and repositories are
@@ -22,6 +23,10 @@ class ReinsApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Must run before Settings (or the Terminal/ExtraKeys screens reading its state) is ever
+        // composed, so the restored values are in place before the first read - not just before
+        // the first write.
+        SettingsPreferences.init(this)
         // Must run before any sshj/Keystore identity code (SSH connects, on-device key
         // generation) - both rely on a "BC" provider with real X25519/MD5 support, which
         // Android's bundled stub provider of the same name does not have.
