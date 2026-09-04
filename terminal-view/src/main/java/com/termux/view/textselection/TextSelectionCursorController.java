@@ -370,9 +370,19 @@ public class TextSelectionCursorController implements CursorController {
         sel[3] = mSelX2;
     }
 
-    /** Get the currently selected text. */
+    /**
+     * Get the currently selected text.
+     *
+     * Joins full-width rows into the row below regardless of the emulator's own auto-wrap flag
+     * (which is only set on true VT100 auto-wrap). A full-screen TUI - a terminal multiplexer
+     * drawing its own pane layout is a common case - can hard-wrap long lines to fit its own
+     * column width, emitting a real newline rather than relying on auto-wrap; from the emulator's
+     * perspective that's indistinguishable from an intentional line break, so copying without this
+     * heuristic reproduces those wrap points as literal newlines - including mid-word - when
+     * pasted elsewhere.
+     */
     public String getSelectedText() {
-        return terminalView.mEmulator.getSelectedText(mSelX1, mSelY1, mSelX2, mSelY2);
+        return terminalView.mEmulator.getSelectedText(mSelX1, mSelY1, mSelX2, mSelY2, true);
     }
 
     /** Get the selected text stored before "MORE" button was pressed on the context menu. */
