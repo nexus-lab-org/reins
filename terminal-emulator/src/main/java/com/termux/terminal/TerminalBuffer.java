@@ -1,6 +1,8 @@
 package com.termux.terminal;
 
 import java.util.Arrays;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * A circular buffer of {@link TerminalRow}:s which keeps notes about what is visible on a logical screen and the scroll
@@ -60,6 +62,7 @@ public final class TerminalBuffer {
     public String getSelectedText(int selX1, int selY1, int selX2, int selY2, boolean joinBackLines, boolean joinFullLines) {
         final StringBuilder builder = new StringBuilder();
         final int columns = mColumns;
+        boolean joinedFromPaneBorder = false;
 
         if (selY1 < -getActiveTranscriptRows()) selY1 = -getActiveTranscriptRows();
         if (selY2 >= mScreenRows) selY2 = mScreenRows - 1;
@@ -81,6 +84,11 @@ public final class TerminalBuffer {
                 x2Index = lineObject.findStartOfColumn(x2 + 1);
             }
             char[] line = lineObject.mText;
+            // The row above ended in a pane border and was joined to this one: drop the padding
+            // the TUI left before this row's text so the words don't pick up a gap.
+            if (joinedFromPaneBorder) {
+                while (x1Index < x2Index && line[x1Index] == ' ') x1Index++;
+            }
             int lastPrintingCharIndex = -1;
             int i;
             boolean rowLineWrap = getLineWrap(row);
@@ -96,13 +104,49 @@ public final class TerminalBuffer {
 
             int len = lastPrintingCharIndex - x1Index + 1;
             if (lastPrintingCharIndex != -1 && len > 0)
-                builder.append(line, x1Index, len);
+                builder.append(stripPaneBorders(new String(line, x1Index, len)));
+
+            // A row that ends in a pane border is text the TUI wrapped inside its pane, so it
+            // continues onto the next row rather than starting a new line.
+            boolean endsInPaneBorder = lastPrintingCharIndex != -1 && isPaneBorder(line[lastPrintingCharIndex]);
+            if (endsInPaneBorder && row < selY2 && row < mScreenRows - 1) {
+                builder.append(' ');
+                joinedFromPaneBorder = true;
+                continue;
+            }
+            joinedFromPaneBorder = false;
 
             boolean lineFillsWidth = lastPrintingCharIndex == x2Index - 1;
             if ((!joinBackLines || !rowLineWrap) && (!joinFullLines || !lineFillsWidth)
                 && row < selY2 && row < mScreenRows - 1) builder.append('\n');
         }
         return builder.toString();
+    }
+
+    /** Pane borders drawn by full-screen TUIs (e.g. herdr): the right and left one-eighth blocks. */
+    private static final Pattern PANE_BORDER_WITH_PADDING = Pattern.compile(" *[\u258F\u2595] *");
+
+    private static boolean isPaneBorder(char c) {
+        return c == '\u258F' || c == '\u2595';
+    }
+
+    /**
+     * Removes pane borders and the padding around them from copied text. A border between two
+     * pieces of text becomes a single space; one at the start or end of the text just disappears.
+     */
+    static String stripPaneBorders(String text) {
+        Matcher matcher = PANE_BORDER_WITH_PADDING.matcher(text);
+        if (!matcher.find()) return text;
+        StringBuilder out = new StringBuilder(text.length());
+        int last = 0;
+        do {
+            out.append(text, last, matcher.start());
+            boolean atEdge = matcher.start() == 0 || matcher.end() == text.length();
+            if (!atEdge) out.append(' ');
+            last = matcher.end();
+        } while (matcher.find());
+        out.append(text, last, text.length());
+        return out.toString();
     }
 
     public String getWordAtLocation(int x, int y) {
