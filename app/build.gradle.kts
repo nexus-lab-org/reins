@@ -15,8 +15,8 @@ android {
         applicationId = "co.maxasif.reins"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Stamped fresh on every build (not just every version bump) so a build shown on-device
