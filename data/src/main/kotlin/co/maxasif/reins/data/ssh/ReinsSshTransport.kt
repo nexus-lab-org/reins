@@ -38,11 +38,11 @@ class ReinsSshTransport private constructor(private val client: SSHClient) : Aut
         return ShellChannel(session, shell)
     }
 
-    class ShellChannel(private val session: Session, private val shell: Session.Shell) : AutoCloseable {
-        val inputStream: InputStream get() = shell.inputStream
-        val outputStream: OutputStream get() = shell.outputStream
+    class ShellChannel(private val session: Session, private val shell: Session.Shell) : ShellChannelIo {
+        override val inputStream: InputStream get() = shell.inputStream
+        override val outputStream: OutputStream get() = shell.outputStream
 
-        fun resize(cols: Int, rows: Int) {
+        override fun resize(cols: Int, rows: Int) {
             shell.changeWindowDimensions(cols, rows, 0, 0)
         }
 

@@ -1,8 +1,21 @@
 package co.maxasif.reins.data.ssh
 
 import co.maxasif.reins.data.DataChannelSession
+import java.io.InputStream
+import java.io.OutputStream
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
+
+/**
+ * The shell operations [SshShellDataChannelSession] actually uses. [ReinsSshTransport.ShellChannel]
+ * is the production implementation; tests supply a stand-in whose streams fail the way a dropped
+ * network does.
+ */
+internal interface ShellChannelIo : AutoCloseable {
+    val inputStream: InputStream
+    val outputStream: OutputStream
+    fun resize(cols: Int, rows: Int)
+}
 
 /**
  * The SSH Data Channel: a plain interactive login shell over [ReinsSshTransport], carrying raw
@@ -20,8 +33,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * incoming PTY bytes. A blocking SSH channel write from there is a real
  * `android.os.NetworkOnMainThreadException`, not a theoretical one - confirmed by reproducing it.
  */
-class SshShellDataChannelSession private constructor(
-    private val channel: ReinsSshTransport.ShellChannel,
+class SshShellDataChannelSession internal constructor(
+    private val channel: ShellChannelIo,
 ) : DataChannelSession {
 
     private sealed class WriterCommand {
@@ -30,8 +43,17 @@ class SshShellDataChannelSession private constructor(
     }
 
     private val closed = AtomicBoolean(false)
+    private val failed = AtomicBoolean(false)
     private var readerThread: Thread? = null
     private val writerQueue = LinkedBlockingQueue<WriterCommand>()
+
+    // The writer thread starts below, during construction, which can be before [startReading]
+    // installs a listener. A failure in that window is held here and delivered once the listener
+    // exists, so it can't be lost and can't escape the thread.
+    private val errorLock = Any()
+    private var errorListener: ((Throwable) -> Unit)? = null
+    private var pendingError: Throwable? = null
+
     private val writerThread = Thread({
         try {
             while (true) {
@@ -45,6 +67,12 @@ class SshShellDataChannelSession private constructor(
             }
         } catch (_: InterruptedException) {
             // Normal shutdown path - close() interrupts this thread.
+        } catch (t: Throwable) {
+            // A dropped network surfaces here as an IOException (or sshj TransportException) from
+            // the socket write or a PTY resize. An uncaught exception on this thread kills the
+            // whole process on Android, and the in-memory settings state dies with it. Report the
+            // failure the same way the reader thread does instead.
+            reportTransportError(t)
         }
     }, "ssh-shell-data-channel-writer").apply {
         isDaemon = true
@@ -52,14 +80,20 @@ class SshShellDataChannelSession private constructor(
     }
 
     override fun sendInput(data: ByteArray) {
-        writerQueue.put(WriterCommand.Input(data))
+        enqueue(WriterCommand.Input(data))
     }
 
     override fun sendResize(cols: Int, rows: Int) {
-        writerQueue.put(WriterCommand.Resize(cols, rows))
+        enqueue(WriterCommand.Resize(cols, rows))
+    }
+
+    private fun enqueue(command: WriterCommand) {
+        if (closed.get() || failed.get()) return
+        writerQueue.put(command)
     }
 
     override fun startReading(onTerminalBytes: (ByteArray) -> Unit, onShutdown: (String?) -> Unit, onError: (Throwable) -> Unit) {
+        installErrorListener(onError)
         val thread = Thread({
             try {
                 val buffer = ByteArray(8192)
@@ -72,12 +106,31 @@ class SshShellDataChannelSession private constructor(
                     if (read > 0) onTerminalBytes(buffer.copyOf(read))
                 }
             } catch (t: Throwable) {
-                if (!closed.get()) onError(t)
+                reportTransportError(t)
             }
         }, "ssh-shell-data-channel-reader")
         thread.isDaemon = true
         readerThread = thread
         thread.start()
+    }
+
+    private fun installErrorListener(listener: (Throwable) -> Unit) {
+        val pending = synchronized(errorLock) {
+            errorListener = listener
+            pendingError.also { pendingError = null }
+        }
+        if (pending != null && !closed.get()) listener(pending)
+    }
+
+    private fun reportTransportError(t: Throwable) {
+        failed.set(true)
+        if (closed.get()) return
+        val listener = synchronized(errorLock) {
+            val current = errorListener
+            if (current == null) pendingError = t
+            current
+        }
+        listener?.invoke(t)
     }
 
     override fun close() {
